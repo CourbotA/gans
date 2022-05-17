@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense
+from keras.layers import Input, Dense
 from keras.models import Model,Sequential
+from tensorflow.keras.optimizers import Adam
 from keras.layers import * 
 l=tf.keras.layers
 
@@ -158,7 +159,7 @@ def build_conditional_discriminator(input_shape=(28, 28,),num_classes=10, verbos
         model.summary()
     return model
 
-def train(generator=None,discriminator=None,gan_model=None,epochs=1000, batch_size=128, sample_interval=50,z_dim=100):
+def train(generator=None,discriminator=None,gan_model=None,epochs=20000, batch_size=128, sample_interval=50,z_dim=100):
     # Load MNIST train samples
     (X_train, y_train), (_, _) = tf.keras.datasets.mnist.load_data()
     # Rescale -1 to 1
@@ -196,11 +197,39 @@ def train(generator=None,discriminator=None,gan_model=None,epochs=1000, batch_si
         # training updates
         print ("%d [Discriminator loss: %f, acc.: %.2f%%] [Generatorloss: %f]" % (epoch, discriminator_loss[0],100*discriminator_loss[1], gen_loss))
         #If at save interval => save generated image samples
-        if epoch % sample_interval == 0:
-            sample_images(epoch,generator)
+        """if epoch % sample_interval == 0:
+            sample_images(epoch,generator)"""
 
-train(generator=build_conditional_discriminator(),discriminator=build_discriminator())
 
-if (generator):
-    generator.save(".\generator")
-    discriminator.save(".\discriminator")
+discriminator=build_conditional_discriminator()
+
+discriminator.compile(loss='binary_crossentropy',
+                    optimizer=tf.keras.optimizers.Adam(0.0002, 0.5),
+                    metrics=['accuracy'])
+
+generator=build_conditional_generator()
+
+generator.compile(loss='binary_crossentropy',
+                    optimizer=tf.keras.optimizers.Adam(0.0002, 0.5),
+                    metrics=['accuracy'])
+z_dim = 100
+
+noise = Input(shape=(z_dim,))
+label = Input(shape=(1,), dtype='int32')
+
+
+img = generator([noise, label])
+
+discriminator.trainable = False
+validity = discriminator([img, label])
+
+gan_model = Model([noise, label], validity)
+gan_model.compile(loss='binary_crossentropy', optimizer=tf.keras.optimizers.Adam(0.0002, 0.5))
+
+train(generator, discriminator, gan_model)
+
+
+if (gan_model):
+    gan_model.save("./GAN")
+    generator.save("./generator")
+    discriminator.save("./discriminator")
